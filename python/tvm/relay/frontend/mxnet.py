@@ -25,6 +25,7 @@ from tvm import relay
 from topi.util import get_const_tuple
 from .. import analysis
 from .. import expr as _expr
+from .. import function as _function
 from .. import op as _op
 from .. import scope_builder as _scope_builder
 from ... import nd as _nd
@@ -1096,7 +1097,7 @@ def _mx_cond(inputs, attrs, subgraphs):
         else_arg_dtype_info = [arg.type_annotation.dtype for arg in else_args]
         else_func = _from_mxnet_impl(subgraphs[2], else_arg_shapes, else_arg_dtype_info)
         sb.ret(_expr.Call(else_func, else_args))
-    func = _expr.Function(input_args, sb.get())
+    func = _function.Function(input_args, sb.get())
     ret = _expr.Call(func, inputs)
     if num_outputs > 1:
         ret = _expr.TupleWrapper(ret, num_outputs)
@@ -1373,8 +1374,8 @@ def _qnn_conv(inputs, attrs, subgraphs, params):
 
         # 3) Clip/cast to change the out dtype.
         _res = relay.clip(_res,
-                          a_min=float(tvm.api.min_value(out_dtype).value),
-                          a_max=float(tvm.api.max_value(out_dtype).value))
+                          a_min=float(tvm.tir.op.min_value(out_dtype).value),
+                          a_max=float(tvm.tir.op.max_value(out_dtype).value))
         _res = relay.cast(_res, out_dtype)
         return _res
 
@@ -1647,8 +1648,8 @@ def _qnn_fully_connected(inputs, attrs, subgraphs, params):
                 _op.multiply(_op.cast(bias_data, 'float32'), bias_requantize_scale)
             rounded_bias = _op.round(multiplied_bias)
             clipped_bias = _op.clip(rounded_bias,
-                                    a_min=tvm.api.min_value('int32').value,
-                                    a_max=tvm.api.max_value('int32').value)
+                                    a_min=tvm.tir.op.min_value('int32').value,
+                                    a_max=tvm.tir.op.max_value('int32').value)
             requantized_bias = _op.cast(clipped_bias, 'int32')
             res = _op.nn.bias_add(res, requantized_bias, axis=-1)
         enable_float_output = attrs.get_bool('enable_float_output', False)
@@ -1969,7 +1970,7 @@ def _from_mxnet_impl(symbol, shape_dict, dtype_info, params=None, mod=None):
 
     outputs = [node_map[e[0]][e[1]] for e in jgraph["heads"]]
     outputs = outputs[0] if len(outputs) == 1 else _expr.Tuple(outputs)
-    func = _expr.Function(analysis.free_vars(outputs), outputs)
+    func = _function.Function(analysis.free_vars(outputs), outputs)
     return func
 
 

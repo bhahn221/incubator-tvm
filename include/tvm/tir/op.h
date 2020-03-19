@@ -28,6 +28,7 @@
 #ifndef TVM_TIR_OP_H_
 #define TVM_TIR_OP_H_
 
+#include <tvm/ir/type.h>
 #include <tvm/tir/expr.h>
 #include <tvm/tir/stmt.h>
 
@@ -37,12 +38,23 @@
 
 
 namespace tvm {
+
 // Most common operators can be overloaded by argument type(PrimExpr).
 // So we put them under the root namespace.
 // It is also necessary to overload operators for PrimExpr.
 //
 // We put more developer oriented APIs -- make_const and is_const under tir
 // as they are more specific to the tir namespace.
+
+/*!
+ * \brief Get the type of the expression under the unified type system.
+ *
+ * This function could return a more refined type than
+ * the runtime type provided by expr->dtype
+ *
+ * \sa tvm/ir/type.h for discussion about the relation between Type and runtime::DataType.
+ */
+TVM_DLL Type GetType(const PrimExpr& expr);
 
 /*!
  * Query the maximum possible value of dtype.
@@ -508,16 +520,22 @@ TVM_DLL PrimExpr LargeUIntImm(DataType dtype, int64_t low, int64_t high);
   }                                                                                    \
 
 TVM_DECLARE_INTRIN_UNARY(exp);
+TVM_DECLARE_INTRIN_UNARY(exp2);
+TVM_DECLARE_INTRIN_UNARY(exp10);
 TVM_DECLARE_INTRIN_UNARY(erf);
 TVM_DECLARE_INTRIN_UNARY(tanh);
 TVM_DECLARE_INTRIN_UNARY(sigmoid);
 TVM_DECLARE_INTRIN_UNARY(sqrt);
 TVM_DECLARE_INTRIN_UNARY(rsqrt);
 TVM_DECLARE_INTRIN_UNARY(log);
+TVM_DECLARE_INTRIN_UNARY(log2);
+TVM_DECLARE_INTRIN_UNARY(log10);
 TVM_DECLARE_INTRIN_UNARY(popcount);
 TVM_DECLARE_INTRIN_UNARY(tan);
 TVM_DECLARE_INTRIN_UNARY(cos);
+TVM_DECLARE_INTRIN_UNARY(cosh);
 TVM_DECLARE_INTRIN_UNARY(sin);
+TVM_DECLARE_INTRIN_UNARY(sinh);
 TVM_DECLARE_INTRIN_UNARY(atan);
 
 namespace tir {

@@ -146,7 +146,9 @@ file(GLOB_RECURSE RELAY_OP_SRCS
     src/relay/op/*.cc
     )
 file(GLOB_RECURSE RELAY_PASS_SRCS
-    src/relay/pass/*.cc
+    src/relay/analysis/*.cc
+    src/relay/transforms/*.cc
+    src/relay/quantize/*.cc
     )
 file(GLOB RELAY_BACKEND_SRCS
     src/relay/backend/*.cc
@@ -257,15 +259,9 @@ include(cmake/modules/contrib/TFLite.cmake)
 
 if(NOT MSVC)
   include(CheckCXXCompilerFlag)
-  if(NOT USE_LLVM STREQUAL "OFF" AND TVM_LLVM_VERSION GREATER 91)
-    check_cxx_compiler_flag("-std=c++14"    SUPPORT_CXX14)
-    message(STATUS "Build with c++14")
-    set(CMAKE_CXX_FLAGS "-std=c++14 ${CMAKE_CXX_FLAGS}")
-  else()
-    check_cxx_compiler_flag("-std=c++11"    SUPPORT_CXX11)
-    message(STATUS "Build with c++11")
-    set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
-  endif()
+  check_cxx_compiler_flag("-std=c++14" SUPPORT_CXX14)
+  message(STATUS "Build with c++14")
+  set(CMAKE_CXX_FLAGS "-std=c++14 ${CMAKE_CXX_FLAGS}")
 endif()
 
 add_library(tvm SHARED ${COMPILER_SRCS} ${RUNTIME_SRCS})

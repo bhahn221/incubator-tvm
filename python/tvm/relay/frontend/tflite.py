@@ -24,10 +24,11 @@ from tvm.ir import IRModule
 from tvm import relay
 from .. import analysis
 from .. import expr as _expr
+from .. import function as _function
 from .. import op as _op
 from .. import qnn as _qnn
-from ..util import get_scalar_from_constant
 from ... import nd as _nd
+from .util import get_scalar_from_constant
 from .common import ExprTable
 from .common import infer_shape as _infer_shape
 
@@ -70,6 +71,7 @@ class OperatorConverter(object):
             'CONCATENATION': self.convert_concatenation,
             'CONV_2D': self.convert_conv2d,
             'COS': self.convert_cos,
+            'DEPTH_TO_SPACE': self.convert_depth_to_space,
             'DEPTHWISE_CONV_2D': self.convert_depthwise_conv2d,
             'DETECTION_POSTPROCESS': self.convert_detection_postprocess,
             'DIV': self.convert_div,
@@ -102,6 +104,7 @@ class OperatorConverter(object):
             'PAD': self.convert_pad,
             'POW': self.convert_pow,
             'PRELU': self.convert_prelu,
+            'REDUCE_ANY': self._convert_reduce_any,
             'REDUCE_MAX': self._convert_reduce_max,
             'REDUCE_MIN': self._convert_reduce_min,
             'REDUCE_PROD': self._convert_reduce_prod,
@@ -109,11 +112,13 @@ class OperatorConverter(object):
             'RESHAPE': self.convert_reshape,
             'RESIZE_BILINEAR': self.convert_resize_bilinear,
             'RESIZE_NEAREST_NEIGHBOR': self.convert_resize_nearest_neighbor,
+            'ROUND': self.convert_round,
             'RSQRT': self.convert_rsqrt,
             'SIN': self.convert_sin,
             'SLICE': self.convert_slice,
             'SOFTMAX': self.convert_softmax,
             'SPACE_TO_BATCH_ND': self.convert_space_to_batch_nd,
+            'SPACE_TO_DEPTH': self.convert_space_to_depth,
             'SPLIT': self.convert_split,
             'SQRT': self.convert_sqrt,
             'SQUARE': self.convert_square,
@@ -676,6 +681,13 @@ class OperatorConverter(object):
                 'TFlite quantized FLOOR operator is not supported yet.')
         return self._convert_unary_elemwise(_op.floor, op)
 
+    def convert_round(self, op):
+        """Convert TFLite ROUND"""
+        if self.is_quantized(op):
+            raise tvm.error.OpNotImplemented(
+                'TFlite quantized ROUND operator is not supported yet.')
+        return self._convert_unary_elemwise(_op.round, op)
+
     def convert_exp(self, op):
         """Convert TFLite EXP"""
         if self.is_quantized(op):
@@ -1079,6 +1091,9 @@ class OperatorConverter(object):
 
     def _convert_reduce_sum(self, op):
         return self._convert_reduce(_op.reduce.sum, op)
+
+    def _convert_reduce_any(self, op):
+        return self._convert_reduce(_op.reduce.any, op)
 
     def convert_fully_connected(self, op):
         """Convert TFLite fully connected"""
@@ -1884,6 +1899,56 @@ class OperatorConverter(object):
 
         return reshaped_permuted_reshaped_padded
 
+    def convert_depth_to_space(self, op):
+        """Convert TFLite DEPTH_TO_SPACE"""
+        try:
+            from tflite.BuiltinOptions import BuiltinOptions
+            from tflite.Operator import Operator
+            from tflite.DepthToSpaceOptions import DepthToSpaceOptions
+        except ImportError:
+            raise ImportError("The tflite package must be installed")
+
+        assert isinstance(op, Operator)
+        input_tensors = self.get_input_tensors(op)
+        assert len(input_tensors) == 1, "input tensors length should be 1"
+
+        input_tensor = input_tensors[0]
+        in_expr = self.get_expr(input_tensor.tensor_idx)
+
+        assert op.BuiltinOptionsType() == BuiltinOptions.DepthToSpaceOptions
+        op_options = op.BuiltinOptions()
+        depth_to_space_options = DepthToSpaceOptions()
+        depth_to_space_options.Init(op_options.Bytes, op_options.Pos)
+        block_size = depth_to_space_options.BlockSize()
+        out = _op.nn.depth_to_space(in_expr, block_size, layout='NHWC')
+
+        return out
+
+    def convert_space_to_depth(self, op):
+        """Convert TFLite SPACE_TO_DEPTH"""
+        try:
+            from tflite.BuiltinOptions import BuiltinOptions
+            from tflite.Operator import Operator
+            from tflite.SpaceToDepthOptions import SpaceToDepthOptions
+        except ImportError:
+            raise ImportError("The tflite package must be installed")
+
+        assert isinstance(op, Operator)
+        input_tensors = self.get_input_tensors(op)
+        assert len(input_tensors) == 1, "input tensors length should be 1"
+
+        input_tensor = input_tensors[0]
+        in_expr = self.get_expr(input_tensor.tensor_idx)
+
+        assert op.BuiltinOptionsType() == BuiltinOptions.SpaceToDepthOptions
+        op_options = op.BuiltinOptions()
+        space_to_depth_options = SpaceToDepthOptions()
+        space_to_depth_options.Init(op_options.Bytes, op_options.Pos)
+        block_size = space_to_depth_options.BlockSize()
+        out = _op.nn.space_to_depth(in_expr, block_size, layout='NHWC')
+
+        return out
+
     def convert_prelu(self, op):
         """Convert TFLite PReLU"""
         try:
@@ -2301,6 +2366,6 @@ def from_tflite(model, shape_dict, dtype_dict):
     params = {k:_nd.array(np.array(v)) for k, v in exp_tab.params.items()}
     outputs = [exp_tab.get_expr(get_tensor_name(subgraph, i)) for i in model_outputs]
     outputs = outputs[0] if len(outputs) == 1 else _expr.Tuple(outputs)
-    func = _expr.Function(analysis.free_vars(outputs), outputs)
+    func = _function.Function(analysis.free_vars(outputs), outputs)
     mod = IRModule.from_expr(func)
     return mod, params

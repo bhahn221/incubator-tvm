@@ -26,7 +26,10 @@ import numpy as np
 import tvm
 from tvm import te
 from tvm import relay
-import tensorflow as tf
+try:
+    import tensorflow.compat.v1 as tf
+except ImportError:
+    import tensorflow as tf
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import math_ops
@@ -156,7 +159,7 @@ def compare_tflite_with_tvm(in_data, in_name, input_tensors,
         if init_global_variables:
             sess.run(variables.global_variables_initializer())
         # convert to tflite model
-        converter = interpreter_wrapper.TFLiteConverter.from_session(
+        converter = tf.lite.TFLiteConverter.from_session(
             sess, input_tensors, output_tensors)
 
         if quantized:
@@ -694,6 +697,15 @@ def _test_ceil(data):
 def _test_floor(data):
     """ One iteration of floor """
     return _test_unary_elemwise(math_ops.floor, data)
+
+#######################################################################
+# Round
+# -----
+
+def _test_round(data):
+    """ One iteration of round """
+    return _test_unary_elemwise(math_ops.round, data)
+
 #######################################################################
 # Exp
 # ---
@@ -787,6 +799,7 @@ def test_all_unary_elemwise():
     if package_version.parse(tf.VERSION) >= package_version.parse('1.14.0'):
         _test_forward_unary_elemwise(_test_ceil)
         _test_forward_unary_elemwise(_test_cos)
+        _test_forward_unary_elemwise(_test_round)
         _test_forward_unary_elemwise(_test_tan)
         _test_forward_unary_elemwise(_test_elu)
 
@@ -1144,11 +1157,24 @@ def _test_reduce_sum(data, keep_dims=None):
     """ One iteration of reduce_sum """
     return _test_reduce(math_ops.reduce_sum, data, keep_dims)
 
+#######################################################################
+# Reduce_any
+# ----------
 
-def _test_forward_reduce(testop):
+def _test_reduce_any(data, keep_dims=None):
+    """ One iteration of reduce_any """
+    return _test_reduce(math_ops.reduce_any, data, keep_dims)
+
+def _test_forward_reduce(testop, dtype="float32"):
     """ Reduce """
-    data0 = [np.random.rand(16, 16, 16, 16).astype("float32"), None]
-    data1 = [np.random.rand(16, 16, 16, 16).astype("float32"), np.array([1, 2], dtype=np.int32)]
+    if dtype == 'bool':
+        data0 = [np.random.choice(a=[False, True], size=(16, 16, 16, 16)).astype(dtype),
+                 None]
+        data1 = [np.random.choice(a=[False, True], size=(16, 16, 16, 16)).astype(dtype),
+                 np.array([1, 2], dtype=np.int32)]
+    else:
+        data0 = [np.random.rand(16, 16, 16, 16).astype(dtype), None]
+        data1 = [np.random.rand(16, 16, 16, 16).astype(dtype), np.array([1, 2], dtype=np.int32)]
     testop(data0)
     testop(data0, keep_dims=False)
     testop(data0, keep_dims=True)
@@ -1169,6 +1195,8 @@ def test_all_reduce():
     _test_forward_reduce_quantized(_test_reduce_mean)
     _test_forward_reduce(_test_reduce_prod)
     _test_forward_reduce(_test_reduce_sum)
+    if package_version.parse(tf.VERSION) >= package_version.parse('1.15.0'):
+        _test_forward_reduce(_test_reduce_any, dtype="bool")
 
 
 #######################################################################
@@ -1419,6 +1447,40 @@ def test_forward_prelu():
     """ PReLU """
     _test_prelu(np.random.uniform(-5, 5, size=(1, 32, 32, 3)).astype("float32"), np.full((3,), 0.2, dtype="float32"))
     _test_prelu(np.random.uniform(-5, 5, size=(1, 32, 32, 3)).astype("float32"), np.full((1, 1, 3), 0.2, dtype="float32"))
+
+#######################################################################
+# DepthToSpace
+# ------------
+
+def _test_depthtospace(data, block_size):
+    """ One iteration of depth_to_space operation with given data and block size """
+
+    with tf.Graph().as_default():
+        in_data = array_ops.placeholder(shape=data.shape, dtype=data.dtype)
+        out = array_ops.depth_to_space(in_data, block_size)
+        compare_tflite_with_tvm(data, 'Placeholder:0', [in_data], [out])
+
+def test_forward_depthtospace():
+    # DEPTH_TO_SPACE comes with TFLite >= 1.15.0 fbs schema
+    if package_version.parse(tf.VERSION) >= package_version.parse('1.15.0'):
+        _test_depthtospace(np.random.normal(size=[1, 32, 32, 4]).astype("float32"), 2)
+        _test_depthtospace(np.random.normal(size=[1, 16, 8, 32]).astype("float32"), 4)
+
+#######################################################################
+# SpaceToDepth
+# ------------
+
+def _test_spacetodepth(data, block_size):
+    """ One iteration of space_to_depth operation with given data and block size """
+
+    with tf.Graph().as_default():
+        in_data = array_ops.placeholder(shape=data.shape, dtype=data.dtype)
+        out = array_ops.space_to_depth(in_data, block_size)
+        compare_tflite_with_tvm(data, 'Placeholder:0', [in_data], [out])
+
+def test_forward_spacetodepth():
+    _test_spacetodepth(np.random.normal(size=[1, 32, 32, 4]).astype("float32"), 2)
+    _test_spacetodepth(np.random.normal(size=[1, 16, 8, 32]).astype("float32"), 4)
 
 #######################################################################
 # Fully Connected
@@ -1713,6 +1775,8 @@ if __name__ == '__main__':
     test_all_resize()
     test_forward_squeeze()
     test_forward_slice()
+    test_forward_depthtospace()
+    test_forward_spacetodepth()
 
     # NN
     test_forward_convolution()

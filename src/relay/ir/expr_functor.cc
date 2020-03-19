@@ -18,7 +18,7 @@
  */
 
 /*!
- * \file src/tvm/relay/expr_functor.cc
+ * \file src/relay/expr_functor.cc
  * \brief A wrapper around ExprFunctor which functionally updates the AST.
  *
  * ExprMutator uses memoization and self return in order to amortize
@@ -109,7 +109,7 @@ Expr ExprMutator::VisitExpr_(const FunctionNode* op) {
       body.same_as(op->body)) {
     return GetRef<Expr>(op);
   } else {
-    return FunctionNode::make(params, body, ret_type, ty_params, op->attrs);
+    return Function(params, body, ret_type, ty_params, op->attrs);
   }
 }
 
@@ -347,7 +347,7 @@ void PostOrderVisit(const Expr& e, std::function<void(const Expr&)> fvisit) {
   ExprApplyVisit(fvisit).VisitExpr(e);
 }
 
-TVM_REGISTER_GLOBAL("relay._analysis.post_order_visit")
+TVM_REGISTER_GLOBAL("relay.analysis.post_order_visit")
 .set_body_typed([](Expr expr, PackedFunc f) {
     PostOrderVisit(expr, [f](const Expr& n) {
         f(n);
@@ -417,7 +417,7 @@ Expr Bind(const Expr& expr, const tvm::Map<Var, Expr>& args_map) {
         new_params.size() == func->params.size()) {
       return expr;
     }
-    auto ret = FunctionNode::make(new_params,
+    auto ret = Function(new_params,
                                   new_body,
                                   func->ret_type,
                                   func->type_params,
@@ -431,7 +431,7 @@ Expr Bind(const Expr& expr, const tvm::Map<Var, Expr>& args_map) {
         new_params.push_back(v);
       }
     }
-    ret = FunctionNode::make(new_params,
+    ret = Function(new_params,
                              new_body,
                              func->ret_type,
                              func->type_params,
@@ -443,7 +443,7 @@ Expr Bind(const Expr& expr, const tvm::Map<Var, Expr>& args_map) {
   }
 }
 
-TVM_REGISTER_GLOBAL("relay._expr.Bind")
+TVM_REGISTER_GLOBAL("relay.ir.Bind")
 .set_body([](TVMArgs args, TVMRetValue* ret) {
     ObjectRef input = args[0];
     if (input->IsInstance<ExprNode>()) {
