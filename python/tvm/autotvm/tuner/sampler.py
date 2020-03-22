@@ -15,7 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=unused-argument, no-self-use, invalid-name
-"""Base class of samplers"""
+""" Base class of samplers
+    [*] Chameleon: Adaptive Code Optimization for
+        Expedited Deep Neural Network Compilation
+        Byung Hoon Ahn, Prannoy Pilligundla, Amir Yazdanbakhsh, Hadi Esmaeilzadeh
+        https://openreview.net/forum?id=rygG4AVFvH
+"""
 import logging
 
 import numpy as np

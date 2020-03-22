@@ -15,7 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=no-else-return,invalid-name,consider-using-enumerate,abstract-method
-"""Sampler that uses Adaptive Sampling"""
+""" Sampler that uses Adaptive Sampling
+    [*] Chameleon: Adaptive Code Optimization for
+        Expedited Deep Neural Network Compilation
+        Byung Hoon Ahn, Prannoy Pilligundla, Amir Yazdanbakhsh, Hadi Esmaeilzadeh
+        https://openreview.net/forum?id=rygG4AVFvH
+"""
 import numpy as np
 
 from .sampler import Sampler
